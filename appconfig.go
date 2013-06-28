@@ -1,7 +1,6 @@
 package o2aserver
 
 import (
-	"encoding/base64"
 )
 
 type AppConfig interface {
