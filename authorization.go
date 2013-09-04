@@ -4,8 +4,6 @@ import (
 	"net/http"
 	//"net/url"
 	//"errors"
-	"code.google.com/p/go-uuid/uuid"
-	"encoding/base64"
 	"time"
 )
 
@@ -22,16 +20,18 @@ type AuthorizationData struct {
 type Authorization struct {
 	storage   Storage
 	appconfig AppConfig
+	tokengen  TokenGenAuthorization
 
 	Data   AuthorizationData
 	State  string
 	Client *Client
 }
 
-func NewAuthorization(storage Storage, appconfig AppConfig) *Authorization {
+func NewAuthorization(storage Storage, tokengen TokenGenAuthorization, appconfig AppConfig) *Authorization {
 	return &Authorization{
 		storage:   storage,
 		appconfig: appconfig,
+		tokengen:  tokengen,
 		Data:      AuthorizationData{},
 	}
 }
@@ -77,11 +77,19 @@ func (a *Authorization) HandleAuthorizeRequest(w *Response, r *http.Request) boo
 func (a *Authorization) FinishAuthorizeRequest(w *Response, r *http.Request, authorized bool, userId string) {
 	if authorized {
 		// generate authorization token
-		token := uuid.New()
-		token = base64.StdEncoding.EncodeToString([]byte(token))
+		err := a.tokengen.GenerateAuthorizationToken(&a.Data)
+		if err != nil {
+			var ret ErrorParameters
+			ret.Error = "server_error"
+			ret.Description = "The authorization server encountered an unexpected condition that prevented it from fulfilling the request. (This error code is needed because a 500 Internal Server Error HTTP status code cannot be returned to the client via an HTTP redirect.)"
+			ret.State = a.State
+
+			w.SetRedirect(302, a.Data.RedirectUri, ret)
+			return
+		}
 
 		// build response
-		a.Data.Code = token
+		//a.Data.Code = token
 		a.Data.UserId = userId
 
 		// save authorization token in storage
@@ -90,7 +98,7 @@ func (a *Authorization) FinishAuthorizeRequest(w *Response, r *http.Request, aut
 		// build response
 		var ret AuthorizeParameters
 		ret.State = a.State
-		ret.Code = token
+		ret.Code = a.Data.Code
 
 		pret := a.appconfig.ProcessAuthorizeResponse(ret)
 

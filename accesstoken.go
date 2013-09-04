@@ -1,39 +1,39 @@
 package o2aserver
 
 import (
+	"log"
 	"net/http"
 	"time"
-	"log"
 )
 
 type AccessTokenData struct {
-	ClientId string
-	AccessToken string
+	ClientId     string
+	AccessToken  string
 	RefreshToken string
-	ExpiresIn int64
-	Scope string
-	RedirectUri string
-	UserId string
-	CreatedAt time.Time
+	ExpiresIn    int64
+	Scope        string
+	RedirectUri  string
+	UserId       string
+	CreatedAt    time.Time
 }
 
 type AccessToken struct {
-	storage Storage
-	tokengen TokenGen
+	storage   Storage
+	tokengen  TokenGenAccess
 	appconfig AppConfig
 
-	Data AccessTokenData
-	State string
-	Client *Client
+	Data          AccessTokenData
+	State         string
+	Client        *Client
 	Authorization *AuthorizationData
 }
 
-func NewAccessToken(storage Storage, tokengen TokenGen, appconfig AppConfig) *AccessToken {
+func NewAccessToken(storage Storage, tokengen TokenGenAccess, appconfig AppConfig) *AccessToken {
 	return &AccessToken{
-		storage: storage,
-		tokengen: tokengen,
+		storage:   storage,
+		tokengen:  tokengen,
 		appconfig: appconfig,
-		Data: AccessTokenData{},
+		Data:      AccessTokenData{},
 	}
 }
 
@@ -45,7 +45,7 @@ func (a *AccessToken) HandleAccessTokenRequest(w *Response, r *http.Request) boo
 		return a.handleAuthorizationCode(w, r)
 	}
 
-	w.SetError(400, ErrorParameters{Error:"unsupported_grant_type", Description:"The authorization grant type is not supported by the authorization server.", State: a.State})
+	w.SetError(400, ErrorParameters{Error: "unsupported_grant_type", Description: "The authorization grant type is not supported by the authorization server.", State: a.State})
 	return false
 }
 
@@ -72,18 +72,17 @@ func (a *AccessToken) handleAuthorizationCode(w *Response, r *http.Request) bool
 		return false
 	}
 
-
 	// load authorization code
 	var err error
 	a.Authorization, err = a.storage.GetAuthorize(code)
 	if err != nil {
-		w.SetError(400, ErrorParameters{Error:"invalid_grant", Description:"The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired or revoked.", State: a.State})
+		w.SetError(400, ErrorParameters{Error: "invalid_grant", Description: "The provided authorization grant (e.g., authorization code, resource owner credentials) or refresh token is invalid, expired or revoked.", State: a.State})
 		return false
 	}
 
 	// redirect uri must match
 	if a.Client.Id != a.Authorization.ClientId || a.Data.RedirectUri != a.Authorization.RedirectUri {
-		w.SetError(400, ErrorParameters{Error:"invalid_grant", Description:"The provided authorization grant does not match the redirection URI used in the authorization request, or was issued to another client.", State: a.State})
+		w.SetError(400, ErrorParameters{Error: "invalid_grant", Description: "The provided authorization grant does not match the redirection URI used in the authorization request, or was issued to another client.", State: a.State})
 		return false
 	}
 
@@ -94,13 +93,13 @@ func (a *AccessToken) handleAuthorizationCode(w *Response, r *http.Request) bool
 	a.Data.Scope = a.Authorization.Scope
 
 	if err := a.tokengen.GenerateAccessToken(&a.Data); err != nil {
-		w.SetError(400, ErrorParameters{Error:"invalid_request", Description:"Server error.", State: a.State})
+		w.SetError(400, ErrorParameters{Error: "invalid_request", Description: "Server error.", State: a.State})
 		return false
 	}
 
 	// save access token
 	if err := a.storage.SaveAccessToken(a.Data); err != nil {
-		w.SetError(400, ErrorParameters{Error:"invalid_request", Description:"Server error.", State: a.State})
+		w.SetError(400, ErrorParameters{Error: "invalid_request", Description: "Server error.", State: a.State})
 		return false
 	}
 
@@ -121,5 +120,5 @@ func (a *AccessToken) handleAuthorizationCode(w *Response, r *http.Request) bool
 	pret := a.appconfig.ProcessAccessTokenResponse(ret)
 
 	w.SetParameters(pret)
-	return true;
+	return true
 }
