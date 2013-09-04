@@ -4,32 +4,35 @@ import (
 	"net/http"
 	//"net/url"
 	//"errors"
-	"encoding/base64"
 	"code.google.com/p/go-uuid/uuid"
+	"encoding/base64"
+	"time"
 )
 
 type AuthorizationData struct {
-	ClientId string
-	Code string
-	Scope string
+	ClientId    string
+	Code        string
+	ExpiresIn   int64
+	Scope       string
 	RedirectUri string
-	UserId string
+	UserId      string
+	CreatedAt   time.Time
 }
 
 type Authorization struct {
-	storage Storage
+	storage   Storage
 	appconfig AppConfig
 
-	Data AuthorizationData
-	State string
+	Data   AuthorizationData
+	State  string
 	Client *Client
 }
 
 func NewAuthorization(storage Storage, appconfig AppConfig) *Authorization {
 	return &Authorization{
-		storage: storage,
+		storage:   storage,
 		appconfig: appconfig,
-		Data: AuthorizationData{},
+		Data:      AuthorizationData{},
 	}
 }
 
@@ -41,8 +44,8 @@ func (a *Authorization) HandleAuthorizeRequest(w *Response, r *http.Request) boo
 	a.Data.Scope = r.Form.Get("scope")
 
 	// must have "response_type=code" parameter
-	if (r.Form.Get("response_type") != "code") {
-		w.SetError(400, ErrorParameters{Error:"invalid_request", Description:"The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.", State: a.State})
+	if r.Form.Get("response_type") != "code" {
+		w.SetError(400, ErrorParameters{Error: "invalid_request", Description: "The request is missing a required parameter, includes an invalid parameter value, includes a parameter more than once, or is otherwise malformed.", State: a.State})
 		return false
 	}
 
@@ -58,6 +61,9 @@ func (a *Authorization) HandleAuthorizeRequest(w *Response, r *http.Request) boo
 	if a.Data.RedirectUri == "" {
 		a.Data.RedirectUri = a.Client.RedirectUri
 	}
+
+	a.Data.ExpiresIn = 600
+	a.Data.CreatedAt = time.Now()
 
 	// check redirect URI
 	if !ValidateUri(a.Client.RedirectUri, a.Data.RedirectUri) {
